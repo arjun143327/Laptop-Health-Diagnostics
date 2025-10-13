@@ -2,82 +2,85 @@ import customtkinter as ctk
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import matplotlib.dates as mdates
 
-# --- Constants for Theming ---
-APP_BG_COLOR = "#24293E"
-FRAME_BG_COLOR = "#2C324A"
-TEXT_COLOR = "#FFFFFF"
-
+# Set a professional, dark theme for the graph to match the app
+plt.style.use("dark_background")
 
 class GraphWindow(ctk.CTkToplevel):
-    """
-    A pop-up window that displays a historical performance graph.
-    """
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.title("Performance History")
-        self.geometry("800x600")
-        self.configure(fg_color=APP_BG_COLOR)
-
-        self.minsize(600, 400)
-
-        self.label = ctk.CTkLabel(
-            self, text="Loading graph data...", font=("Segoe UI", 16))
-        self.label.pack(pady=20, padx=20)
-
-        # This function is called immediately to create the graph
-        self.create_graph()
+        self.title("System Performance History")
+        self.geometry("900x600")
+        self.configure(fg_color="#2C324A")
+        
+        self.label = ctk.CTkLabel(self, text="Loading graph data...", font=("Segoe UI", 16))
+        self.label.pack(pady=20)
+        
+        # Load and create graph in a separate step to allow the "Loading" message to show
+        self.after(100, self.create_graph)
 
     def load_data(self):
-        """Loads system log data from the CSV file using pandas."""
+        """Loads and prepares system log data for plotting."""
         try:
             df = pd.read_csv("system_log.csv", parse_dates=['timestamp'])
-            # Use only the last 1000 data points to keep the graph from getting crowded
+            # Use the last 1000 data points to keep the graph fast and responsive
             return df.tail(1000)
         except FileNotFoundError:
-            # Display a helpful message if the log file hasn't been created yet
-            self.label.configure(
-                text="Error: system_log.csv not found.\nPlease run data_logger.py to collect some data first.")
+            self.label.configure(text="Error: system_log.csv not found.\nPlease run the data logger to collect data.")
+            return None
+        except pd.errors.EmptyDataError:
+            self.label.configure(text="Warning: system_log.csv is empty.\nNo data to display.")
             return None
 
     def create_graph(self):
-        """Creates and embeds a matplotlib graph into the CustomTkinter window."""
+        """Creates and embeds a readable, well-formatted Matplotlib graph."""
         data = self.load_data()
-
+        
         if data is None or data.empty:
-            return  # Stop if there is no data to plot
+            return
 
-        self.label.pack_forget()  # Remove the "Loading..." label
+        self.label.pack_forget() # Remove the "Loading" label once data is ready
 
-        # --- Matplotlib Graph Creation ---
-        plt.style.use('seaborn-v0_8-darkgrid')
-
+        # Create the plot with improved aesthetics
         fig, ax1 = plt.subplots(figsize=(8, 5))
-        fig.patch.set_facecolor(APP_BG_COLOR)
+        fig.patch.set_facecolor("#2C324A") # Match the window background
+        ax1.set_facecolor("#24293E") # Set the plot area background
 
-        # Plot CPU Load
-        ax1.plot(data['timestamp'], data['cpu_load'],
-                 color='#4A90E2', label='CPU Load (%)', linewidth=2)
-        ax1.set_xlabel('Time', color=TEXT_COLOR, fontsize=12)
-        ax1.set_ylabel('CPU Load (%)', color='#4A90E2', fontsize=12)
-        ax1.tick_params(axis='y', labelcolor='#4A90E2')
-        ax1.tick_params(axis='x', colors=TEXT_COLOR, rotation=30)
-
-        # Create a second y-axis for Memory Usage
+        # Plot CPU Data (Blue)
+        ax1.plot(data['timestamp'], data['cpu_load'], color='#4A90E2', label='CPU Load (%)', linewidth=1.5)
+        
+        # Create a second Y-axis for Memory that shares the same X-axis
         ax2 = ax1.twinx()
-        ax2.plot(data['timestamp'], data['memory_usage'],
-                 color='#2CC990', label='Memory Usage (%)', linewidth=2)
-        ax2.set_ylabel('Memory Usage (%)', color='#2CC900', fontsize=12)
+        
+        # Plot Memory Data (Green)
+        ax2.plot(data['timestamp'], data['memory_usage'], color='#2CC990', label='Memory Usage (%)', linewidth=1.5)
+
+        # --- KEY FIXES FOR READABILITY ---
+        # 1. Add a grid for easier reading
+        ax1.grid(True, linestyle='--', alpha=0.3)
+        
+        # 2. Set clear labels for all axes
+        ax1.set_xlabel("Time", fontsize=12, color="#AAB1C2")
+        ax1.set_ylabel("CPU Load (%)", color='#4A90E2', fontsize=12)
+        ax2.set_ylabel("Memory Usage (%)", color='#2CC990', fontsize=12)
+
+        # 3. Color the axis numbers to match their corresponding lines
+        ax1.tick_params(axis='y', labelcolor='#4A90E2')
         ax2.tick_params(axis='y', labelcolor='#2CC990')
+        ax1.tick_params(axis='x', colors="#AAB1C2", labelrotation=25)
+        
+        # 4. Create a single, clear legend for both lines
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax2.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
 
-        plt.title('System Performance History', color=TEXT_COLOR, fontsize=16)
-        fig.tight_layout()  # Adjust plot to prevent labels from overlapping
-        ax1.grid(True, which='both', linestyle='--',
-                 linewidth=0.5, color=FRAME_BG_COLOR)
-        ax2.grid(False)  # Only show the grid for the primary axis
+        # 5. Format the timestamp on the X-axis to be clean and readable
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M\n%m-%d'))
+        fig.tight_layout() # Adjust plot to prevent labels from overlapping
 
-        # --- Embed the Matplotlib graph into the CustomTkinter window ---
-        canvas = FigureCanvasTkAgg(fig, master=self)
+        # Embed the finished, readable plot into the CustomTkinter window
+        canvas = FigureCanvasTkAgg(fig, self)
         canvas.draw()
         canvas.get_tk_widget().pack(side="top", fill="both", expand=True, padx=10, pady=10)
+
