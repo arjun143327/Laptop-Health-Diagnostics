@@ -9,8 +9,8 @@ class HealthCalculator:
         self.weights = {
             'cpu': 0.25,
             'memory': 0.25,
-            'disk': 0.20,
-            'battery': 0.15,
+            'disk': 0.30,
+            'battery': 0.20,
             'temperature': 0.15,
         }
 
