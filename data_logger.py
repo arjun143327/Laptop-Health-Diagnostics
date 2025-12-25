@@ -1,22 +1,11 @@
 import psutil
-import csv
-from datetime import datetime
 import time
-import os
+from datetime import datetime
+from database_manager import DatabaseManager
 
 # --- Configuration ---
 LOG_INTERVAL = 60  # seconds between each log entry
-CSV_FILENAME = "system_log.csv"
-CSV_HEADER = [
-    "timestamp",
-    "cpu_load",
-    "memory_usage",
-    "battery_percentage",
-    "is_charging",
-    "top_process_name",
-    "top_process_cpu"
-]
-
+CSV_FILENAME = "system_log.csv" # Kept for migration purpose
 
 def get_top_process():
     """
@@ -25,8 +14,11 @@ def get_top_process():
     """
     try:
         # Get a list of all processes with their CPU usage and name
-        processes = [p.info for p in psutil.process_iter(
-            ['name', 'cpu_percent'])]
+        # Optimization: Use iterator properly to avoid overhead
+        processes = [p.info for p in psutil.process_iter(['name', 'cpu_percent'])]
+        
+        if not processes:
+            return "N/A", 0.0
 
         # Sort the list by CPU usage in descending order
         top_process = sorted(
@@ -46,7 +38,7 @@ def log_system_metrics():
     # Get battery info, handling systems with no battery
     battery = psutil.sensors_battery()
     battery_percentage = battery.percent if battery else "N/A"
-    is_charging = battery.power_plugged if battery else "N/A"
+    is_charging = battery.power_plugged if battery else False
 
     # Get the top process
     top_proc_name, top_proc_cpu = get_top_process()
@@ -67,34 +59,33 @@ def log_system_metrics():
 def main():
     """
     Main loop to log data at a set interval.
-    Creates the CSV file with a header if it doesn't exist.
+    Uses DatabaseManager to store data.
     """
-    # Check if the CSV file needs a header
-    file_exists = os.path.isfile(CSV_FILENAME)
+    print("--- System Data Logger (Database Edition) ---")
+    
+    # Initialize Database Manager
+    db = DatabaseManager()
+    
+    # Attempt migration if legacy CSV exists
+    migrated_count = db.migrate_from_csv(CSV_FILENAME)
+    if migrated_count > 0:
+        print(f"Successfully migrated {migrated_count} records from old CSV to Database.")
 
-    print("--- System Data Logger ---")
-    print(f"Logging data every {LOG_INTERVAL} seconds to '{CSV_FILENAME}'")
+    print(f"Logging data every {LOG_INTERVAL} seconds to SQLite DB.")
     print("Press Ctrl+C to stop.")
 
     try:
-        with open(CSV_FILENAME, mode='a', newline='', encoding='utf-8') as csv_file:
-            writer = csv.DictWriter(csv_file, fieldnames=CSV_HEADER)
+        while True:
+            # Get the latest metrics
+            current_metrics = log_system_metrics()
 
-            if not file_exists:
-                writer.writeheader()  # Write header only once
+            # Insert into DB
+            db.insert_metric(current_metrics)
 
-            while True:
-                # Get the latest metrics
-                current_metrics = log_system_metrics()
+            print(f"[{current_metrics['timestamp']}] Log entry saved. CPU: {current_metrics['cpu_load']}% | Top Process: {current_metrics['top_process_name']}")
 
-                # Write the metrics to the CSV file
-                writer.writerow(current_metrics)
-                csv_file.flush()  # Ensure data is written immediately
-
-                print(f"[{current_metrics['timestamp']}] Log entry saved. CPU: {current_metrics['cpu_load']}% | Top Process: {current_metrics['top_process_name']}")
-
-                # Wait for the next interval
-                time.sleep(LOG_INTERVAL)
+            # Wait for the next interval
+            time.sleep(LOG_INTERVAL)
 
     except KeyboardInterrupt:
         print("\nLogger stopped by user. Data saved.")

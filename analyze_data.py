@@ -16,11 +16,20 @@ def analyze_performance_data():
     Reads the system log, calculates performance and battery drain baselines,
     and saves them to a JSON profile file.
     """
-    print(f"Analyzing data from '{INPUT_CSV}'...")
+    from database_manager import DatabaseManager
+    
+    print(f"Analyzing data from database...")
     try:
-        df = pd.read_csv(INPUT_CSV)
-    except FileNotFoundError:
-        print(f"Error: {INPUT_CSV} not found. Please run the logger first.")
+        db = DatabaseManager()
+        # Fetch up to 10,000 recent records for analysis (enough for a week of minute-by-minute data)
+        df = db.get_recent_history(limit=10000)
+        
+        if df.empty:
+            print("No data found in database. Run the data logger first.")
+            return
+
+    except Exception as e:
+        print(f"Error accessing database: {e}")
         return
 
     df['timestamp'] = pd.to_datetime(df['timestamp'])

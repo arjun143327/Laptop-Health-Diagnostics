@@ -22,15 +22,19 @@ class GraphWindow(ctk.CTkToplevel):
 
     def load_data(self):
         """Loads and prepares system log data for plotting."""
+        from database_manager import DatabaseManager
+        
         try:
-            df = pd.read_csv("system_log.csv", parse_dates=['timestamp'])
-            # Use the last 1000 data points to keep the graph fast and responsive
-            return df.tail(1000)
-        except FileNotFoundError:
-            self.label.configure(text="Error: system_log.csv not found.\nPlease run the data logger to collect data.")
-            return None
-        except pd.errors.EmptyDataError:
-            self.label.configure(text="Warning: system_log.csv is empty.\nNo data to display.")
+            db = DatabaseManager()
+            df = db.get_recent_history(limit=1000)
+            
+            if df.empty:
+                self.label.configure(text="No data available.\nPlease ensure the data logger is running.")
+                return None
+                
+            return df
+        except Exception as e:
+            self.label.configure(text=f"Error loading data: {e}")
             return None
 
     def create_graph(self):

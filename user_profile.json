@@ -1,0 +1,12 @@
+{
+    "work_hours_cpu": {
+        "avg": 5.382573179033356,
+        "std": 3.8442598378900916
+    },
+    "off_hours_cpu": {
+        "avg": 8.273795180722892,
+        "std": 3.551648278287917
+    },
+    "avg_battery_drain_per_minute": -0.017094017094017096,
+    "profile_creation_date": "2025-10-13 15:40:40"
+}
